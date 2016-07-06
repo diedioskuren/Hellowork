@@ -1,7 +1,12 @@
-# coding utf-8 
+#!/usr/bin/env python
+# encoding=utf8 
 import sys
-import MySQLdb    
-    
+import MySQLdb
+import urllib2
+
+
+reload(sys)
+sys.setdefaultencoding('utf8')
       
 
 def get_table(html):
@@ -10,12 +15,8 @@ def get_table(html):
 
     all_lines = ''
 
-    f = open(html)
-
-    for line in iter(f):
+    for line in iter(html):
         all_lines = all_lines+line.rstrip()
-
-    f.close()
 
     pos = all_lines.find("d-sole")
     table = all_lines[pos:]
@@ -29,56 +30,51 @@ def get_table(html):
     return table
 
 
+# Create a row to process at a time
+
 def get_rows(table):
 
-    pos1 = 1
+    pos_1 = 1  # Position of the <tr>
+    pos_2 = 1  # Position of the </tr>
     count = 0
     
-    while pos1 > 0:
+    while pos_1 >= 0:
         count = count + 1
-
-        print count
-
-        # Stuck in the work so I start learning to git.
-
-        pos1 = table.find('<tr')
-
-        if pos1 > 0:
-            table = table[pos1:]
-            pos2   = table.find('/tr>')
-
-            table = table[pos2:]
-
         
-        
-        
+        pos_1 = table.find('<tr')
 
-        
+        if pos_1 >= 0:
+            table = table[pos_1:]
 
-def get_fields(table):
+            pos_2 = table.find('/tr>')
+            row = table[0:pos_2+4]
+            
+            if count != 1:
+                get_fields(row)
+            
+            table = table[pos_2+4:]
 
-    DEBUG = 1
 
-    # For every table skip the header first
-    rec = ''
-    pos = table.find('<tr')
-    rec = table[pos:]
+# Process a row and query the all fields            
 
-    pos = rec.find('/tr>')
-    nxt = rec[pos+4:]
-    rec = rec[0:pos]
-    
+def get_fields(row):
+
+    DEBUG = 0
+
     # new
-    rec = nxt
+    rec = row
     pos = rec.find('/td>')
     nxt = rec[pos+4:]
     rec = rec[0:pos+4]
     pos = rec.find('<td')
     new = rec[pos:]
 
+
+    
     if DEBUG: print new
 
-    # rec
+    # ren
+    
     ren = nxt
     pos = ren.find('/td>')
     nxt = ren[pos+4:]
@@ -86,7 +82,12 @@ def get_fields(table):
     pos = ren.find('<td')
     ren = ren[pos:]
 
-    if DEBUG: print rec
+    pos = ren.find('<div>')
+    ren = ren[pos+5:]
+    pos = ren.find('</div>')
+    ren = ren[0:pos]
+        
+    if DEBUG: print ren
 
     # id
 
@@ -97,13 +98,40 @@ def get_fields(table):
     pos = rec.find('<td')
     rec = rec[pos:]
 
+    if DEBUG: print rec
+    
     pos = rec.find('</a>')
     rec = rec[0:pos+4]
-    pos = rec.find('<a id')
+    pos = rec.find('<a')
     id  = rec[pos:]
     
     if DEBUG: print id
 
+    # url
+
+    url = id
+    pos = url.find('href=\"')
+    url = url[pos+8:]
+    pos = url.find('target')
+    url = url[0:pos-1]
+    url = url.replace('amp;','')
+    url = "https://www.hellowork.go.jp/servicef/"+url
+    
+    if DEBUG: print url
+
+    # uuid
+
+    uuid = id
+    pos  = uuid.find('_blank\">')
+    uuid = uuid[pos+8:]
+    pos  = uuid.find("</a>")
+    uuid = uuid[0:pos]
+    uuid = uuid.rstrip()
+    uuid = uuid.lstrip()
+    
+    if DEBUG: print uuid
+
+    
     # title
 
     rec = nxt
@@ -128,7 +156,26 @@ def get_fields(table):
     pos = rec.find('<td')
     salary = rec[pos:]
 
-    if DEBUG: print salary
+    pos = salary.find("／")
+    salarystatus = salary[0:pos]
+    pos = salarystatus.find("<div>")
+    salarystatus = salarystatus[pos+5:]
+
+    if DEBUG: print salarystatus
+
+    pos = salary.find("円")
+    salarylow = salary[0:pos]
+    pos = salarylow.find("／")
+    salarylow = salarylow[pos+7:]
+
+    if DEBUG: print salarylow
+
+    pos = salary.find("円</div>")
+    salaryhigh = salary[0:pos]
+    pos = salary.find("～")
+    salaryhigh = salaryhigh[pos+3:]
+
+    if DEBUG: print salaryhigh
 
     rec = nxt
     pos = rec.find('/td>')
@@ -168,7 +215,17 @@ def get_fields(table):
     pos = rec.find('<td')
     date = rec[pos:]
 
-    if DEBUG: print date
+    pos1 = date.find('年')
+    pos2 = date.find('月')
+    pos3 = date.find('日')
+
+    year  = date[pos1-2:pos1]
+    month = date[pos1+7:pos2]
+    day   = date[pos2+3:pos3]
+
+    us_date = str(int(year)+1988)+"-0"+month+"-0"+day
+
+    if DEBUG: print us_date
 
 
     connector = MySQLdb.connect(host="localhost",
@@ -178,12 +235,16 @@ def get_fields(table):
                                 charset="utf8")
 
     cursor = connector.cursor()
-    sql = "INSERT INTO jobsearch (rec, id, title, salary, hours, category, location, date) " + "VALUES ('"+ren+"', '"+id+"', '"+title+"', '"+salary+"', '"+hours+"', '"+category+"', '"+location+"', '"+date+"')"  
+    sql = "INSERT IGNORE INTO jobsearch (rec, id, uuid, url, title, salary, salarystatus, salarylow, salaryhigh, hours, category, location, date, us_date) " + "VALUES ('"+ren+"', '"+id+"', '"+uuid+"', '"+url+"', '"+title+"', '"+salary+"', '"+salarystatus+"', '"+salarylow+"', '"+salaryhigh+"', '"+hours+"', '"+category+"', '"+location+"', '"+date+"', '"+us_date+"')"
 
-    if DEBUG: print sql
+    try:
+         cursor.execute(sql)
+         connector.commit()
+
+    except:
+         print "Error in MySQL."
     
-    cursor.execute(sql)
-    connector.commit()
+
 
     cursor.close()
     connector.close()
@@ -191,10 +252,14 @@ def get_fields(table):
     
 if __name__ == '__main__':
 
-    table = get_table("Osaka_IT.html")
-
-    # Should be getting 20 rows per table.
+    html = open("Osaka_IT.html")
+    
+    table = get_table(html)
+    
     get_rows(table)
 
+    html.close()
+
     # get fields from mysql table 
-    # get_fields(table)
+    get_fields(table)
+
