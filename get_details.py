@@ -55,6 +55,7 @@ def get_details_uuid():
 
     cursor = connector.cursor()
 
+
     # Working on jobsearch
     cursor.execute("SELECT uuid, url FROM jobsearch ORDER BY date DESC")
 
@@ -65,15 +66,20 @@ def get_details_uuid():
 
            uuid = row[0]
            url  = row[1]
-           
-           (detail, number, number_local) = fetch_details(url)
 
-           # Working on jobdetails
-           sql = "INSERT IGNORE INTO jobdetails (uuid, detail, number, number_local) VALUE ('"+uuid+"', '"+detail+"', '"+number+"', '"+number_local+"')"
+           sql = "SELECT num FROM jobdetails WHERE uuid='"+uuid+"'"
 
            cursor.execute(sql)
-           connector.commit()
+           if (cursor.rowcount < 1):
+           
+               (detail, number, number_local) = fetch_details(url)
+          
+               # Working on jobdetails
+               sql = "INSERT IGNORE INTO jobdetails (uuid, detail, number, number_local) VALUE ('"+uuid+"', '"+detail+"', '"+number+"', '"+number_local+"')"
 
+               cursor.execute(sql)
+               connector.commit()
+                                      
     cursor.close()
     connector.close()
 
