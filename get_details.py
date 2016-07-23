@@ -79,11 +79,14 @@ def get_details_uuid():
 
                cursor.execute(sql)
                connector.commit()
+
+ 	       sys.stdout.write('.')	
+	       sys.stdout.flush()
                                       
     cursor.close()
     connector.close()
 
-
+    sys.stdout.write('\n')
 
 
 if __name__ == '__main__':
